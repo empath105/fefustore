@@ -31,6 +31,33 @@ class CategoryListCreateAPI(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+class CategoryDetailAPI(APIView):
+    def put(self, request, pk):
+        if not request.user.is_authenticated or not request.user.is_staff:
+            return Response({'detail': 'Недостаточно прав.'}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            category = Category.objects.get(pk=pk)
+        except Category.DoesNotExist:
+            return Response({'error': 'Категория не найдена'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Передаем partial=True, чтобы можно было изменять только имя
+        serializer = CategorySerializer(category, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        if not request.user.is_authenticated or not request.user.is_staff:
+            return Response({'detail': 'Недостаточно прав.'}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            category = Category.objects.get(pk=pk)
+            category.delete()
+            return Response({'success': True, 'detail': 'Категория удалена'}, status=status.HTTP_204_NO_CONTENT)
+        except Category.DoesNotExist:
+            return Response({'error': 'Категория не найдена'}, status=status.HTTP_404_NOT_FOUND)
 
 class ProductListCreateAPI(APIView):
     serializer_class = ProductSerializer
@@ -50,7 +77,7 @@ class ProductListCreateAPI(APIView):
                 models.Q(description__icontains=search_query)
             )
 
-        serializer = ProductSerializer(queryset, many=True)
+        serializer = ProductSerializer(queryset, many=True, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
@@ -73,7 +100,7 @@ class ProductDetailAPI(APIView):
         except Product.DoesNotExist:
             return Response({'error': 'Товар не найден'}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = ProductSerializer(product)
+        serializer = ProductSerializer(product, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def put(self, request, pk):
@@ -253,7 +280,7 @@ class OrderDetailAPI(APIView):
         serializer = OrderSerializer(order)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    def put(self, request, pk):
+    def patch(self, request, pk):
         if not request.user.is_authenticated or not request.user.is_staff:
             return Response({'detail': 'Доступ запрещен. Требуются права администратора.'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -263,7 +290,7 @@ class OrderDetailAPI(APIView):
             return Response({'error': 'Заказ не найден'}, status=status.HTTP_404_NOT_FOUND)
 
         new_status = request.data.get('status')
-        
+    
         available_statuses = [choice[0] for choice in Order.STATUS_CHOICES]
         if new_status not in available_statuses:
             return Response(

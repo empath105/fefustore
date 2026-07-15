@@ -1,9 +1,11 @@
 ﻿from django.db import models
 from django.contrib.auth.models import User
+from PIL import Image
+from pytils.translit import slugify
 
 class Category(models.Model):
     name = models.CharField("Название", max_length=100)
-    slug = models.SlugField("Слаг (URL)", unique=True)
+    slug = models.SlugField("Слаг (URL)", unique=True, blank=True)
 
     class Meta:
         verbose_name = "Категория"
@@ -11,6 +13,11 @@ class Category(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
 
 
 class Product(models.Model):
@@ -32,6 +39,18 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.image:
+            img_path = self.image.path
+            img = Image.open(img_path)
+
+            max_size = (800, 800)
+            
+            if img.height > 800 or img.width > 800:
+                img.thumbnail(max_size, Image.Resampling.LANCZOS)
+                img.save(img_path, format=img.format, quality=85)
 
 
 class CartItem(models.Model):
@@ -55,10 +74,10 @@ class CartItem(models.Model):
 class Order(models.Model):
     STATUS_CHOICES = [
         ('new', 'Новый'),
-        ('assembling', 'Собирается на складе'),
+        ('packing', 'Собирается на складе'),
         ('delivering', 'Передан службе доставки'),
-        ('delivered', 'Доставлен'),
-        ('cancelled', 'Отменён'),
+        ('completed', 'Доставлен'),
+        ('canceled', 'Отменён'),
     ]
 
     user = models.ForeignKey(
